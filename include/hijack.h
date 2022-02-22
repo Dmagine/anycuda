@@ -20,7 +20,8 @@
 #define HIJACK_LIBRARY_H
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 #include <inttypes.h>
@@ -105,85 +106,92 @@ extern "C" {
 #define GET_VALID_VALUE(x) (((x) >= 0 && (x) <= 100) ? (x) : 0)
 #define CODEC_NORMALIZE(x) (x * 85 / 100)
 
-typedef struct {
-  void *fn_ptr;
-  char *name;
-} entry_t;
+  typedef struct
+  {
+    void *fn_ptr;
+    char *name;
+  } entry_t;
 
-typedef struct {
-  int major;
-  int minor;
-} __attribute__((packed, aligned(8))) version_t;
+  typedef struct
+  {
+    int major;
+    int minor;
+  } __attribute__((packed, aligned(8))) version_t;
 
-/**
- * Controller configuration data format
- */
-typedef struct {
-  char pod_uid[48];
-  int limit;
-  char occupied[4044];
-  char container_name[FILENAME_MAX];
-  char bus_id[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
-  uint64_t gpu_memory;
-  int utilization;
-  int hard_limit;
-  version_t driver_version;
-  int enable;
-} __attribute__((packed, aligned(8))) resource_data_t;
+  /**
+   * Controller configuration data format
+   */
+  typedef struct
+  {
+    char pod_uid[48];
+    int limit;
+    char occupied[4044];
+    char container_name[FILENAME_MAX];
+    char bus_id[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
+    uint64_t gpu_memory;
+    int utilization;
+    int hard_limit;
+    version_t driver_version;
+    int enable;
+  } __attribute__((packed, aligned(8))) resource_data_t;
 
-typedef enum {
-  INFO = 0,
-  ERROR = 1,
-  WARNING = 2,
-  FATAL = 3,
-  VERBOSE = 4,
-} log_level_enum_t;
+  typedef enum
+  {
+    INFO = 0,
+    ERROR = 1,
+    WARNING = 2,
+    FATAL = 3,
+    VERBOSE = 4,
+  } log_level_enum_t;
 
 #define LOGGER(level, format, ...)                              \
   ({                                                            \
     char *_print_level_str = getenv("LOGGER_LEVEL");            \
     int _print_level = 3;                                       \
-    if (_print_level_str) {                                     \
+    if (_print_level_str)                                       \
+    {                                                           \
       _print_level = (int)strtoul(_print_level_str, NULL, 10);  \
       _print_level = _print_level < 0 ? 3 : _print_level;       \
     }                                                           \
-    if (level <= _print_level) {                                \
+    if (level <= _print_level)                                  \
+    {                                                           \
       fprintf(stderr, "%s:%d " format "\n", __FILE__, __LINE__, \
               ##__VA_ARGS__);                                   \
     }                                                           \
-    if (level == FATAL) {                                       \
+    if (level == FATAL)                                         \
+    {                                                           \
       exit(-1);                                                 \
     }                                                           \
   })
 
-/**
- * Read controller configuration from \aCONTROLLER_CONFIG_PATH
- *
- * @return 0 -> success
- */
-int read_controller_configuration();
+  /**
+   * Read controller configuration from \aCONTROLLER_CONFIG_PATH
+   *
+   * @return 0 -> success
+   */
+  int read_controller_configuration();
 
-/**
- * Load library and initialize some data
- */
-void load_necessary_data();
+  /**
+   * Load library and initialize some data
+   */
+  void load_necessary_data();
 
-/**
- * Register data to remote controller to retrieve configuration
- *
- * @param bus_id bus is of GPU card
- * @param pod_uid  pod uid of Pod
- * @param container_name container name of Pod
- */
-void register_to_remote_with_data(const char *bus_id, const char *pod_uid,
-                                  const char *container_name);
+  /**
+   * Register data to remote controller to retrieve configuration
+   *
+   * @param bus_id bus is of GPU card
+   * @param pod_uid  pod uid of Pod
+   * @param container_name container name of Pod
+   */
+  void register_to_remote_with_data(const char *bus_id, const char *pod_uid,
+                                    const char *container_name);
 
-/**
- * Tell whether we're using old method to find controller configuration path
- *
- * @return 1 -> using new, 0 -> using old
- */
-int is_custom_config_path();
+  /**
+   * Tell whether we're using old method to find controller configuration path
+   *
+   * @return 1 -> using new, 0 -> using old
+   */
+  int is_custom_config_path();
 
 #ifdef __cplusplus
 }
