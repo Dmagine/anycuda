@@ -70,17 +70,16 @@ extern "C"
     char bytes[16];
   } CUuuid;
 
-  typedef int CUdevice;                 /**< CUDA device */
-  typedef struct CUctx_st *CUcontext;   /**< CUDA context */
-  typedef struct CUmod_st *CUmodule;    /**< CUDA module */
-  typedef struct CUfunc_st *CUfunction; /**< CUDA function */
-  typedef struct CUarray_st *CUarray;   /**< CUDA array */
-  typedef struct CUmipmappedArray_st
-      *CUmipmappedArray;                  /**< CUDA mipmapped array */
-  typedef struct CUtexref_st *CUtexref;   /**< CUDA texture reference */
-  typedef struct CUsurfref_st *CUsurfref; /**< CUDA surface reference */
-  typedef struct CUevent_st *CUevent;     /**< CUDA event */
-  typedef struct CUstream_st *CUstream;   /**< CUDA stream */
+  typedef int CUdevice;                                 /**< CUDA device */
+  typedef struct CUctx_st *CUcontext;                   /**< CUDA context */
+  typedef struct CUmod_st *CUmodule;                    /**< CUDA module */
+  typedef struct CUfunc_st *CUfunction;                 /**< CUDA function */
+  typedef struct CUarray_st *CUarray;                   /**< CUDA array */
+  typedef struct CUmipmappedArray_st *CUmipmappedArray; /**< CUDA mipmapped array */
+  typedef struct CUtexref_st *CUtexref;                 /**< CUDA texture reference */
+  typedef struct CUsurfref_st *CUsurfref;               /**< CUDA surface reference */
+  typedef struct CUevent_st *CUevent;                   /**< CUDA event */
+  typedef struct CUstream_st *CUstream;                 /**< CUDA stream */
   typedef struct CUgraphicsResource_st
       *CUgraphicsResource; /**< CUDA graphics interop resource */
   typedef unsigned long long
@@ -983,7 +982,17 @@ extern "C"
     CU_POINTER_ATTRIBUTE_BUFFER_ID =
         7, /**< A process-wide unique ID for an allocated memory region*/
     CU_POINTER_ATTRIBUTE_IS_MANAGED =
-        8 /**< Indicates if the pointer points to managed memory */
+        8, /**< Indicates if the pointer points to managed memory */
+
+    CU_POINTER_ATTRIBUTE_DEVICE_ORDINAL,
+    CU_POINTER_ATTRIBUTE_IS_LEGACY_CUDA_IPC_CAPABLE,
+    CU_POINTER_ATTRIBUTE_RANGE_START_ADDR,
+    CU_POINTER_ATTRIBUTE_RANGE_SIZE,
+    CU_POINTER_ATTRIBUTE_MAPPED,
+    CU_POINTER_ATTRIBUTE_ALLOWED_HANDLE_TYPES,
+    CU_POINTER_ATTRIBUTE_IS_GPU_DIRECT_RDMA_CAPABLE,
+    CU_POINTER_ATTRIBUTE_ACCESS_FLAGS,
+    CU_POINTER_ATTRIBUTE_MEMPOOL_HANDLE,
   } CUpointer_attribute;
 
   /**

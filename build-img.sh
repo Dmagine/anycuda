@@ -5,7 +5,7 @@ set -o nounset
 set -o xtrace
 
 ROOT=$(cd $(dirname ${BASH_SOURCE[0]}) && pwd -P)
-IMAGE_FILE=${IMAGE_FILE:-"tkestack.io/gaia/vcuda:latest"}
+IMAGE_FILE=${IMAGE_FILE:-"anylearn/cudabase:latest"}
 
 function cleanup() {
     rm -rf ${ROOT}/cuda-control.tar
@@ -20,7 +20,7 @@ function build_img() {
     rm -rf ${ROOT}/build
     mkdir ${ROOT}/build
     git archive -o ${ROOT}/build/cuda-control.tar --format=tar --prefix=cuda-control/ HEAD
-    cp ${ROOT}/vcuda.spec ${ROOT}/build
+    cp ${ROOT}/anycuda.spec ${ROOT}/build
     cp ${ROOT}/Dockerfile ${ROOT}/build
     (
       cd ${ROOT}/build

@@ -32,6 +32,7 @@ extern "C"
 #include <stdlib.h>
 
 #include "nvml-subset.h"
+#include "cuda-subset.h"
 
 /**
  * Controller configuration base path
@@ -121,9 +122,6 @@ extern "C"
     int gpu_mem_limit[16];
     uint64_t used_gpu_mem[16];
 
-    // int limit;
-    // int utilization;
-    // int hard_limit;
     int valid;
   } __attribute__((packed, aligned(8))) resource_data_t;
 

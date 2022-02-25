@@ -14,48 +14,21 @@ endif ()
 
 set(STATIC_C_LIBRARIES -static-libgcc -static-libstdc++)
 
-if (${USE_ORIGINAL})
-    add_definitions(-DUSE_ORIGINAL)
-    # controller related
-    add_library(cuda-control SHARED
-            src/hijack_call.c
-            include/hijack.h
-            include/cJSON.h
-            include/cuda-subset.h
-            include/nvml-subset.h
-            include/cuda-helper.h
-            include/nvml-helper.h
-            src/cuda_originals.c
-            src/nvml_entry.c
-            src/loader.c
-            src/cJSON.c
-            src/register.c)
-    target_link_libraries(cuda-control ${STATIC_C_LIBRARIES})
-else (NOT ${USE_ORIGINAL})
-    # controller related
-    add_library(cuda-control SHARED
-            src/hijack_call.c
-            include/hijack.h
-            include/cJSON.h
-            include/cuda-subset.h
-            include/nvml-subset.h
-            include/cuda-helper.h
-            include/nvml-helper.h
-            src/cuda_originals.c
-            src/nvml_entry.c
-            src/loader.c
-            src/cJSON.c
-            src/register.c)
-
-    target_link_libraries(cuda-control ${STATIC_C_LIBRARIES})
-
-    # process monitor
-    add_executable(nvml-monitor
-            tools/monitor_dockernized.c
-            src/loader.c
-            src/register.c)
-    target_link_libraries(nvml-monitor ${STATIC_C_LIBRARIES} -ldl -lpthread)
-endif ()
+add_definitions(-DUSE_ORIGINAL)
+# controller related
+add_library(cuda-control SHARED
+        src/hijack_call.c
+        include/hijack.h
+        include/cJSON.h
+        include/cuda-subset.h
+        include/nvml-subset.h
+        include/cuda-helper.h
+        include/nvml-helper.h
+        src/cuda_originals.c
+        src/nvml_entry.c
+        src/loader.c
+        src/cJSON.c)
+target_link_libraries(cuda-control ${STATIC_C_LIBRARIES})
 
 target_compile_options(cuda-control PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-std=c++11>)
 

@@ -42,21 +42,6 @@ extern entry_t nvml_library_entry[];
 typedef void (*atomic_fn_ptr)(int, void *);
 
 static pthread_once_t g_init_set = PTHREAD_ONCE_INIT;
-static pthread_once_t g_register_set = PTHREAD_ONCE_INIT;
-
-static volatile int g_cur_cuda_cores = 0;
-static volatile int g_total_cuda_cores = 0;
-
-static int g_max_thread_per_sm = 0;
-static int g_sm_num = 0;
-
-static int g_block_x = 1, g_block_y = 1, g_block_z = 1;
-static uint32_t g_block_locker = 0;
-
-static const struct timespec g_cycle = {
-    .tv_sec = 0,
-    .tv_nsec = TIME_TICK * MILLISEC,
-};
 
 static const struct timespec g_wait = {
     .tv_sec = 0,
@@ -64,12 +49,6 @@ static const struct timespec g_wait = {
 };
 
 /** internal function definition */
-static void register_to_remote();
-
-static void active_utilization_notifier();
-
-static void *utilization_watcher(void *);
-
 static void active_podconf_notifier();
 
 int get_cuda_device_ordinal(int *, CUdeviceptr);
@@ -80,19 +59,9 @@ int read_anylearn_podconf();
 
 static void get_used_gpu_memory(void *, CUdevice);
 
-static void get_used_gpu_utilization(void *);
-
 static void initialization();
 
-static void rate_limiter(int, int);
-
-static void change_token(int);
-
-static const char *nvml_error(nvmlReturn_t);
-
 static const char *cuda_error(CUresult, const char **);
-
-static int int_match(const void *, const void *);
 
 /** export function definition */
 CUresult cuDriverGetVersion(int *driverVersion);
@@ -192,30 +161,13 @@ typedef struct
   int sys_process_num;
 } utilization_t;
 
-/** helper function */
-int int_match(const void *a, const void *b)
-{
-  const int *ra = (const int *)a;
-  const int *rb = (const int *)b;
-
-  if (*ra < *rb)
-  {
-    return -1;
-  }
-
-  if (*ra > *rb)
-  {
-    return 1;
-  }
-
-  return 0;
-}
-
 int strsplit(const char *s, char **dest, const char *sep)
 {
   char *token;
   int index = 0;
-  token = strtok(s, sep);
+  char *src = (char *)malloc(sizeof(s));
+  strncpy(src, s, strlen(s));
+  token = strtok(src, sep);
   while (token != NULL)
   {
     dest[index] = token;
@@ -225,19 +177,6 @@ int strsplit(const char *s, char **dest, const char *sep)
   return index;
 }
 
-const char *nvml_error(nvmlReturn_t code)
-{
-  const char *(*err_fn)(nvmlReturn_t) = NULL;
-
-  err_fn = nvml_library_entry[NVML_ENTRY_ENUM(nvmlErrorString)].fn_ptr;
-  if (unlikely(!err_fn))
-  {
-    LOGGER(FATAL, "can't find nvmlErrorString");
-  }
-
-  return err_fn(code);
-}
-
 const char *cuda_error(CUresult code, const char **p)
 {
   CUDA_ENTRY_CALL(cuda_library_entry, cuGetErrorString, code, p);
@@ -245,269 +184,12 @@ const char *cuda_error(CUresult code, const char **p)
   return *p;
 }
 
-static void change_token(int delta)
-{
-  int cuda_cores_before = 0, cuda_cores_after = 0;
-
-  LOGGER(5, "delta: %d, curr: %d", delta, g_cur_cuda_cores);
-  do
-  {
-    cuda_cores_before = g_cur_cuda_cores;
-    cuda_cores_after = cuda_cores_before + delta;
-
-    if (unlikely(cuda_cores_after > g_total_cuda_cores))
-    {
-      cuda_cores_after = g_total_cuda_cores;
-    }
-  } while (!CAS(&g_cur_cuda_cores, cuda_cores_before, cuda_cores_after));
-}
-
-static void rate_limiter(int grids, int blocks)
-{
-  int before_cuda_cores = 0;
-  int after_cuda_cores = 0;
-  int kernel_size = grids;
-
-  LOGGER(5, "grid: %d, blocks: %d", grids, blocks);
-  LOGGER(5, "launch kernel %d, curr core: %d", kernel_size, g_cur_cuda_cores);
-  if (g_anycuda_config.valid && g_anycuda_config.gpu_mem_limit_valid)
-  {
-    do
-    {
-    CHECK:
-      before_cuda_cores = g_cur_cuda_cores;
-      LOGGER(8, "current core: %d", g_cur_cuda_cores);
-      if (before_cuda_cores < 0)
-      {
-        nanosleep(&g_cycle, NULL);
-        goto CHECK;
-      }
-      after_cuda_cores = before_cuda_cores - kernel_size;
-    } while (!CAS(&g_cur_cuda_cores, before_cuda_cores, after_cuda_cores));
-  }
-}
-
-int delta(int up_limit, int user_current, int share)
-{
-  int utilization_diff =
-      abs(up_limit - user_current) < 5 ? 5 : abs(up_limit - user_current);
-  int increment =
-      g_sm_num * g_sm_num * g_max_thread_per_sm / 256 * utilization_diff / 10;
-
-  /* Accelerate cuda cores allocation when utilization vary widely */
-  if (utilization_diff > up_limit / 2)
-  {
-    increment = increment * utilization_diff * 2 / (up_limit + 1);
-  }
-
-  if (unlikely(increment < 0))
-  {
-    LOGGER(3, "overflow: %d, current sm: %d, thread_per_sm: %d, diff: %d",
-           increment, g_sm_num, g_max_thread_per_sm, utilization_diff);
-  }
-
-  if (user_current <= up_limit)
-  {
-    share = share + increment > g_total_cuda_cores ? g_total_cuda_cores
-                                                   : share + increment;
-  }
-  else
-  {
-    share = share - increment < 0 ? 0 : share - increment;
-  }
-
-  return share;
-}
-
-// #lizard forgives
-static void *utilization_watcher(void *arg UNUSED)
-{
-  utilization_t top_result = {
-      .user_current = 0,
-      .sys_current = 0,
-      .sys_process_num = 0,
-  };
-  int sys_free = 0;
-  int share = 0;
-  int i = 0;
-  int avg_sys_free = 0;
-  int pre_sys_process_num = 1;
-  int up_limit = g_anycuda_config.utilization;
-
-  LOGGER(5, "start %s", __FUNCTION__);
-  LOGGER(4, "sm: %d, thread per sm: %d", g_sm_num, g_max_thread_per_sm);
-  while (1)
-  {
-    nanosleep(&g_wait, NULL);
-    do
-    {
-      get_used_gpu_utilization((void *)&top_result);
-    } while (!top_result.valid);
-
-    sys_free = MAX_UTILIZATION - top_result.sys_current;
-
-    if (g_anycuda_config.hard_limit)
-    {
-      /* Avoid usage jitter when application is initialized*/
-      if (top_result.sys_process_num == 1 &&
-          top_result.user_current < up_limit / 10)
-      {
-        g_cur_cuda_cores =
-            delta(g_anycuda_config.utilization, top_result.user_current, share);
-        continue;
-      }
-      share = delta(g_anycuda_config.utilization, top_result.user_current, share);
-    }
-    else
-    {
-      if (pre_sys_process_num != top_result.sys_process_num)
-      {
-        /* When a new process comes, all processes are reset to initial value*/
-        if (pre_sys_process_num < top_result.sys_process_num)
-        {
-          share = g_max_thread_per_sm;
-          up_limit = g_anycuda_config.utilization;
-          i = 0;
-          avg_sys_free = 0;
-        }
-        pre_sys_process_num = top_result.sys_process_num;
-      }
-
-      /* 1.Only one process on the GPU
-       * Allocate cuda cores according to the limit value.
-       *
-       * 2.Multiple processes on the GPU
-       * First, change the up_limit of the process according to the
-       * historical resource utilization. Second, allocate the cuda
-       * cores according to the changed limit value.*/
-      if (top_result.sys_process_num == 1)
-      {
-        share = delta(g_anycuda_config.limit, top_result.user_current, share);
-      }
-      else
-      {
-        i++;
-        avg_sys_free += sys_free;
-        if (i % CHANGE_LIMIT_INTERVAL == 0)
-        {
-          if (avg_sys_free * 2 / CHANGE_LIMIT_INTERVAL > USAGE_THRESHOLD)
-          {
-            up_limit = up_limit + g_anycuda_config.utilization / 10 >
-                               g_anycuda_config.limit
-                           ? g_anycuda_config.limit
-                           : up_limit + g_anycuda_config.utilization / 10;
-          }
-          i = 0;
-        }
-        avg_sys_free = i % (CHANGE_LIMIT_INTERVAL / 2) == 0 ? 0 : avg_sys_free;
-        share = delta(up_limit, top_result.user_current, share);
-      }
-    }
-
-    change_token(share);
-
-    LOGGER(4, "util: %d, up_limit: %d,  share: %d, cur: %d",
-           top_result.user_current, up_limit, share, g_cur_cuda_cores);
-  }
-}
-
-static void active_utilization_notifier()
-{
-  pthread_t tid;
-
-  pthread_create(&tid, NULL, utilization_watcher, NULL);
-
-#ifdef __APPLE__
-  pthread_setname_np("utilization_watcher");
-#else
-  pthread_setname_np(tid, "utilization_watcher");
-#endif
-}
-
-static void get_used_gpu_utilization(void *arg)
-{
-  nvmlProcessUtilizationSample_t processes_sample[MAX_PIDS];
-  int processes_num = MAX_PIDS;
-  unsigned int running_processes = MAX_PIDS;
-  nvmlProcessInfo_t pids_on_device[MAX_PIDS];
-  nvmlDevice_t dev;
-  utilization_t *top_result = (utilization_t *)arg;
-  nvmlReturn_t ret;
-  struct timeval cur;
-  size_t microsec;
-  int codec_util = 0;
-
-  int i;
-
-  ret =
-      NVML_ENTRY_CALL(nvml_library_entry, nvmlDeviceGetHandleByIndex, 0, &dev);
-  if (unlikely(ret))
-  {
-    LOGGER(4, "nvmlDeviceGetHandleByIndex: %s", nvml_error(ret));
-    return;
-  }
-
-  ret =
-      NVML_ENTRY_CALL(nvml_library_entry, nvmlDeviceGetComputeRunningProcesses,
-                      dev, &running_processes, pids_on_device);
-  if (unlikely(ret))
-  {
-    LOGGER(4, "nvmlDeviceGetComputeRunningProcesses: %s", nvml_error(ret));
-    return;
-  }
-
-  top_result->sys_process_num = running_processes;
-  gettimeofday(&cur, NULL);
-  microsec = (cur.tv_sec - 1) * 1000UL * 1000UL + cur.tv_usec;
-  top_result->checktime = microsec;
-  ret = NVML_ENTRY_CALL(nvml_library_entry, nvmlDeviceGetProcessUtilization,
-                        dev, processes_sample, &processes_num, microsec);
-  if (unlikely(ret))
-  {
-    LOGGER(4, "nvmlDeviceGetProcessUtilization: %s", nvml_error(ret));
-    return;
-  }
-
-  top_result->user_current = 0;
-  top_result->sys_current = 0;
-  for (i = 0; i < processes_num; i++)
-  {
-    if (processes_sample[i].timeStamp >= top_result->checktime)
-    {
-      top_result->valid = 1;
-      top_result->sys_current += GET_VALID_VALUE(processes_sample[i].smUtil);
-
-      codec_util = GET_VALID_VALUE(processes_sample[i].encUtil) +
-                   GET_VALID_VALUE(processes_sample[i].decUtil);
-      top_result->sys_current += CODEC_NORMALIZE(codec_util);
-
-      LOGGER(8, "try to find %d from pid tables", processes_sample[i].pid);
-      if (check_pod_pid(processes_sample[i].pid) == 0)
-      {
-        top_result->user_current += GET_VALID_VALUE(processes_sample[i].smUtil);
-
-        codec_util = GET_VALID_VALUE(processes_sample[i].encUtil) +
-                     GET_VALID_VALUE(processes_sample[i].decUtil);
-        top_result->user_current += CODEC_NORMALIZE(codec_util);
-      }
-    }
-  }
-
-  LOGGER(5, "sys utilization: %d", top_result->sys_current);
-  LOGGER(5, "used utilization: %d", top_result->user_current);
-}
-
 static void active_podconf_notifier()
 {
   pthread_t tid;
 
   pthread_create(&tid, NULL, podconf_watcher, NULL);
-
-#ifdef __APPLE__
-  pthread_setname_np("podconf_watcher");
-#else
   pthread_setname_np(tid, "podconf_watcher");
-#endif
 }
 
 static void *podconf_watcher(void *arg UNUSED)
@@ -526,7 +208,6 @@ static void *podconf_watcher(void *arg UNUSED)
 int read_anylearn_podconf()
 {
   int fd = 0;
-  int rsize;
   int ret = 1;
 
   fd = open(config_path, O_RDONLY);
@@ -537,7 +218,6 @@ int read_anylearn_podconf()
   }
   // read podconf from json
   char buff[4096] = {"\0"};
-  rsize = (int)read(fd, buff, 4096);
 
   g_podconf = cJSON_Parse(buff);
   strncpy(g_anycuda_config.resource_name, cJSON_GetObjectItem(g_podconf, "resourceName")->valuestring, 48);
@@ -579,6 +259,92 @@ DONE:
 int get_cuda_device_ordinal(int *ordinal, CUdeviceptr ptr)
 {
   return CUDA_ENTRY_CALL(cuda_library_entry, cuPointerGetAttribute, ordinal, CU_POINTER_ATTRIBUTE_DEVICE_ORDINAL, ptr);
+}
+
+int split_str(char *line, char *key, char *value, char d)
+{
+  int index = 0;
+  for (index = 0; index < strlen(line) && line[index] != d; index++)
+  {
+  }
+
+  if (index == strlen(line))
+  {
+    key[0] = '\0';
+    value = '\0';
+    return 1;
+  }
+
+  int start = 0, i = 0;
+  // trim head
+  for (; start < index && (line[start] == ' ' || line[start] == '\t'); start++)
+  {
+  }
+
+  for (i = 0; start < index; i++, start++)
+  {
+    key[i] = line[start];
+  }
+  // trim tail
+  for (; i > 0 && (key[i - 1] == '\0' || key[i - 1] == '\n' || key[i - 1] == '\t'); i--)
+  {
+  }
+  key[i] = '\0';
+
+  start = index + 1;
+  i = 0;
+
+  // trim head
+  for (; start < strlen(line) && (line[start] == ' ' || line[start] == '\t'); start++)
+  {
+  }
+
+  for (i = 0; start < strlen(line); i++, start++)
+  {
+    value[i] = line[start];
+  }
+  // trim tail
+  for (; i > 0 && (value[i - 1] == '\0' || value[i - 1] == '\n' || value[i - 1] == '\t'); i--)
+  {
+  }
+  value[i] = '\0';
+  return 0;
+}
+
+int read_cgroup(char *pidpath, char *cgroup_key, char *cgroup_value)
+{
+  char buff[255];
+  FILE *f = fopen(pidpath, "rb");
+  if (f == NULL)
+  {
+    LOGGER(VERBOSE, "read file %s failed\n", pidpath);
+    return 1;
+  }
+
+  while (fgets(buff, 255, f))
+  {
+    int index = 0;
+    for (; index < strlen(buff) && buff[index] != ':'; index++)
+    {
+    }
+
+    if (index == strlen(buff))
+      continue;
+
+    char key[128], value[128];
+    if (split_str(&buff[index + 1], key, value, ':') != 0)
+      continue;
+
+    if (strcmp(key, cgroup_key) == 0)
+    {
+      strcpy(cgroup_value, value);
+      fclose(f);
+      return 0;
+    }
+  }
+
+  fclose(f);
+  return 1;
 }
 
 int check_pod_pid(unsigned int pid)
@@ -657,6 +423,16 @@ static void get_used_gpu_memory(void *arg, CUdevice device_id)
   LOGGER(4, "total used memory: %zu", *used_memory);
 }
 
+static void load_devices_info()
+{
+  CUDA_ENTRY_CALL(cuda_library_entry, cuDeviceGetCount, &g_device_count);
+  for (int i = 0; i < g_device_count; i++)
+  {
+    CUDA_ENTRY_CALL(cuda_library_entry, cuDeviceGet, &g_devices_info[i].device, i);
+    CUDA_ENTRY_CALL(cuda_library_entry, cuDeviceGetUuid, &g_devices_info[i].uuid, g_devices_info[i].device);
+  }
+}
+
 static void initialization()
 {
   int ret;
@@ -669,26 +445,6 @@ static void initialization()
            cuda_error((CUresult)ret, &cuda_err_string));
   }
 
-  ret = CUDA_ENTRY_CALL(cuda_library_entry, cuDeviceGetAttribute, &g_sm_num,
-                        CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, 0);
-  if (unlikely(ret))
-  {
-    LOGGER(FATAL, "can't get processor number, error %s",
-           cuda_error((CUresult)ret, &cuda_err_string));
-  }
-
-  ret = CUDA_ENTRY_CALL(cuda_library_entry, cuDeviceGetAttribute,
-                        &g_max_thread_per_sm,
-                        CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR, 0);
-  if (unlikely(ret))
-  {
-    LOGGER(FATAL, "can't get max thread per processor, error %s",
-           cuda_error((CUresult)ret, &cuda_err_string));
-  }
-
-  g_total_cuda_cores = g_max_thread_per_sm * g_sm_num * FACTOR;
-  LOGGER(4, "total cuda cores: %d", g_total_cuda_cores);
-  active_utilization_notifier();
   load_devices_info();
   active_podconf_notifier();
 }
@@ -748,7 +504,7 @@ CUresult cuMemAllocManaged(CUdeviceptr *dptr, size_t bytesize,
 
     if (unlikely(used + request_size > g_anycuda_config.gpu_mem_limit[ordinal]))
     {
-      ret = CUDA_ERROR_OUT_OF_MEMORY;
+      ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, bytesize, CU_MEM_ATTACH_GLOBAL);
       goto DONE;
     }
   }
@@ -777,7 +533,7 @@ CUresult cuMemAlloc_v2(CUdeviceptr *dptr, size_t bytesize)
 
     if (unlikely(used + request_size > g_anycuda_config.gpu_mem_limit[ordinal]))
     {
-      ret = CUDA_ERROR_OUT_OF_MEMORY;
+      ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, bytesize, CU_MEM_ATTACH_GLOBAL);
       goto DONE;
     }
   }
@@ -805,7 +561,7 @@ CUresult cuMemAlloc(CUdeviceptr *dptr, size_t bytesize)
 
     if (unlikely(used + request_size > g_anycuda_config.gpu_mem_limit[ordinal]))
     {
-      ret = CUDA_ERROR_OUT_OF_MEMORY;
+      ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, bytesize, CU_MEM_ATTACH_GLOBAL);
       goto DONE;
     }
   }
@@ -835,7 +591,7 @@ CUresult cuMemAllocPitch_v2(CUdeviceptr *dptr, size_t *pPitch,
 
     if (unlikely(used + request_size > g_anycuda_config.gpu_mem_limit[ordinal]))
     {
-      ret = CUDA_ERROR_OUT_OF_MEMORY;
+      ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, request_size, CU_MEM_ATTACH_GLOBAL);
       goto DONE;
     }
   }
@@ -865,7 +621,7 @@ CUresult cuMemAllocPitch(CUdeviceptr *dptr, size_t *pPitch, size_t WidthInBytes,
 
     if (unlikely(used + request_size > g_anycuda_config.gpu_mem_limit[ordinal]))
     {
-      ret = CUDA_ERROR_OUT_OF_MEMORY;
+      ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, request_size, CU_MEM_ATTACH_GLOBAL);
       goto DONE;
     }
   }
@@ -1152,9 +908,6 @@ CUresult cuLaunchKernel_ptsz(CUfunction f, unsigned int gridDimX,
                              unsigned int sharedMemBytes, CUstream hStream,
                              void **kernelParams, void **extra)
 {
-  rate_limiter(gridDimX * gridDimY * gridDimZ,
-               blockDimX * blockDimY * blockDimZ);
-
   return CUDA_ENTRY_CALL(cuda_library_entry, cuLaunchKernel_ptsz, f, gridDimX,
                          gridDimY, gridDimZ, blockDimX, blockDimY, blockDimZ,
                          sharedMemBytes, hStream, kernelParams, extra);
@@ -1166,9 +919,6 @@ CUresult cuLaunchKernel(CUfunction f, unsigned int gridDimX,
                         unsigned int blockDimZ, unsigned int sharedMemBytes,
                         CUstream hStream, void **kernelParams, void **extra)
 {
-  rate_limiter(gridDimX * gridDimY * gridDimZ,
-               blockDimX * blockDimY * blockDimZ);
-
   return CUDA_ENTRY_CALL(cuda_library_entry, cuLaunchKernel, f, gridDimX,
                          gridDimY, gridDimZ, blockDimX, blockDimY, blockDimZ,
                          sharedMemBytes, hStream, kernelParams, extra);
@@ -1176,7 +926,6 @@ CUresult cuLaunchKernel(CUfunction f, unsigned int gridDimX,
 
 CUresult cuLaunch(CUfunction f)
 {
-  rate_limiter(1, g_block_x * g_block_y * g_block_z);
   return CUDA_ENTRY_CALL(cuda_library_entry, cuLaunch, f);
 }
 
@@ -1186,8 +935,6 @@ CUresult cuLaunchCooperativeKernel_ptsz(
     unsigned int blockDimZ, unsigned int sharedMemBytes, CUstream hStream,
     void **kernelParams)
 {
-  rate_limiter(gridDimX * gridDimY * gridDimZ,
-               blockDimX * blockDimY * blockDimZ);
   return CUDA_ENTRY_CALL(cuda_library_entry, cuLaunchCooperativeKernel_ptsz, f,
                          gridDimX, gridDimY, gridDimZ, blockDimX, blockDimY,
                          blockDimZ, sharedMemBytes, hStream, kernelParams);
@@ -1201,8 +948,6 @@ CUresult cuLaunchCooperativeKernel(CUfunction f, unsigned int gridDimX,
                                    unsigned int sharedMemBytes,
                                    CUstream hStream, void **kernelParams)
 {
-  rate_limiter(gridDimX * gridDimY * gridDimZ,
-               blockDimX * blockDimY * blockDimZ);
   return CUDA_ENTRY_CALL(cuda_library_entry, cuLaunchCooperativeKernel, f,
                          gridDimX, gridDimY, gridDimZ, blockDimX, blockDimY,
                          blockDimZ, sharedMemBytes, hStream, kernelParams);
@@ -1210,7 +955,6 @@ CUresult cuLaunchCooperativeKernel(CUfunction f, unsigned int gridDimX,
 
 CUresult cuLaunchGrid(CUfunction f, int grid_width, int grid_height)
 {
-  rate_limiter(grid_width * grid_height, g_block_x * g_block_y * g_block_z);
   return CUDA_ENTRY_CALL(cuda_library_entry, cuLaunchGrid, f, grid_width,
                          grid_height);
 }
@@ -1218,29 +962,12 @@ CUresult cuLaunchGrid(CUfunction f, int grid_width, int grid_height)
 CUresult cuLaunchGridAsync(CUfunction f, int grid_width, int grid_height,
                            CUstream hStream)
 {
-  rate_limiter(grid_width * grid_height, g_block_x * g_block_y * g_block_z);
   return CUDA_ENTRY_CALL(cuda_library_entry, cuLaunchGridAsync, f, grid_width,
                          grid_height, hStream);
 }
 
 CUresult cuFuncSetBlockShape(CUfunction hfunc, int x, int y, int z)
 {
-  if (g_anycuda_config.valid && g_anycuda_config.gpu_mem_limit_valid)
-  {
-    while (!CAS(&g_block_locker, 0, 1))
-    {
-    }
-
-    g_block_x = x;
-    g_block_y = y;
-    g_block_z = z;
-
-    LOGGER(5, "Set block shape: %d, %d, %d", x, y, z);
-
-    while (!CAS(&g_block_locker, 1, 0))
-    {
-    }
-  }
   return CUDA_ENTRY_CALL(cuda_library_entry, cuFuncSetBlockShape, hfunc, x, y,
                          z);
 }

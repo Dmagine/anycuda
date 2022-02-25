@@ -851,8 +851,6 @@ resource_data_t g_anycuda_config = {
     .gpu_mem_limit_valid = 0,
     .gpu_mem_limit = {0},
     .used_gpu_mem = {0},
-    // .limit = 0,
-    // .utilization = 0,
     .valid = 0,
 };
 
@@ -861,7 +859,6 @@ cJSON *g_podconf;
 device_info g_devices_info[16];
 int g_device_count = 0;
 
-static char base_dir[FILENAME_MAX] = EMPTY_PREFIX;
 char config_path[FILENAME_MAX] = {0};
 char driver_version[FILENAME_MAX] = "";
 
@@ -998,16 +995,6 @@ static void matchRegex(const char *pattern, const char *matchString,
 
   regfree(&regex);
   return;
-}
-
-static void load_devices_info()
-{
-  CUDA_ENTRY_CALL(cuda_library_entry, cuDeviceGetCount, &g_device_count);
-  for (int i = 0; i < g_device_count; i++)
-  {
-    CUDA_ENTRY_CALL(cuda_library_entry, cuDeviceGet, &g_devices_info[i].device, i);
-    CUDA_ENTRY_CALL(cuda_library_entry, cuDeviceGetUuid, &g_devices_info[i].uuid, g_devices_info[i].device);
-  }
 }
 
 static void load_podconf_path()

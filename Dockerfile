@@ -15,11 +15,11 @@ COPY cuda-control.tar /tmp
 ARG version
 
 RUN cd /tmp && tar xvf /tmp/cuda-control.tar && \
-    cd /tmp/cuda-control && mkdir vcuda-${version} && \
-    cd vcuda-${version} && cmake -DCMAKE_BUILD_TYPE=Release .. && \
+    cd /tmp/cuda-control && mkdir anycuda-${version} && \
+    cd anycuda-${version} && cmake -DCMAKE_BUILD_TYPE=Release .. && \
     make
 
-RUN cd /tmp/cuda-control && tar cf /tmp/vcuda.tar.gz -c vcuda-${version}
+RUN cd /tmp/cuda-control && tar cf /tmp/anycuda.tar.gz -c anycuda-${version}
 
 # stage 2
 FROM centos:7 as rpmpkg
@@ -27,8 +27,8 @@ FROM centos:7 as rpmpkg
 RUN yum install -y rpm-build
 RUN mkdir -p /root/rpmbuild/{SPECS,SOURCES}
 
-COPY vcuda.spec /root/rpmbuild/SPECS
-COPY --from=build /tmp/vcuda.tar.gz /root/rpmbuild/SOURCES
+COPY anycuda.spec /root/rpmbuild/SPECS
+COPY --from=build /tmp/anycuda.tar.gz /root/rpmbuild/SOURCES
 
 RUN echo '%_topdir /root/rpmbuild' > /root/.rpmmacros \
   && echo '%__os_install_post %{nil}' >> /root/.rpmmacros \
@@ -42,7 +42,7 @@ ARG commit
 RUN rpmbuild -bb --quiet \
   --define 'version '${version}'' \
   --define 'commit '${commit}'' \
-  vcuda.spec
+  anycuda.spec
 
 # stage 3
 FROM centos:7
@@ -50,5 +50,5 @@ FROM centos:7
 ARG version
 ARG commit
 
-COPY --from=rpmpkg  /root/rpmbuild/RPMS/x86_64/vcuda-${version}-${commit}.el7.x86_64.rpm /tmp
-RUN rpm -ivh /tmp/vcuda-${version}-${commit}.el7.x86_64.rpm && rm -rf /tmp/vcuda-${version}-${commit}.el7.x86_64.rpm
+COPY --from=rpmpkg  /root/rpmbuild/RPMS/x86_64/anycuda-${version}-${commit}.el7.x86_64.rpm /tmp
+RUN rpm -ivh /tmp/anycuda-${version}-${commit}.el7.x86_64.rpm && rm -rf /tmp/anycuda-${version}-${commit}.el7.x86_64.rpm
