@@ -36,7 +36,7 @@ extern "C"
 /**
  * Controller configuration base path
  */
-#define VCUDA_CONFIG_PATH "/etc/vcuda/"
+#define ANYCUDA_CONFIG_PATH "/var/run/anylearn"
 
 /**
  * Controller pid information file name
@@ -46,24 +46,7 @@ extern "C"
 /**
  * Controller configuration file name
  */
-#define CONTROLLER_CONFIG_NAME "vcuda.config"
-#define PIDS_CONFIG_PATH (VCUDA_CONFIG_PATH "/" PIDS_CONFIG_NAME)
-#define CONTROLLER_CONFIG_PATH (VCUDA_CONFIG_PATH "/" CONTROLLER_CONFIG_NAME)
-
-/**
- * RPC binary base path
- */
-#define RPC_CLIENT_PATH "/usr/local/nvidia/bin/"
-
-/**
- * RPC binary file name
- */
-#define RPC_CLIENT_NAME "gpu-client"
-
-/**
- * RPC address
- */
-#define RPC_ADDR (VCUDA_CONFIG_PATH "vcuda.sock")
+#define PIDS_CONFIG_PATH (ANYCUDA_CONFIG_PATH "/" PIDS_CONFIG_NAME)
 
 /**
  * Default prefix for cgroup path
@@ -118,22 +101,37 @@ extern "C"
     int minor;
   } __attribute__((packed, aligned(8))) version_t;
 
+  typedef struct
+  {
+    char *uuid;
+    int limit;
+  } __attribute__((packed, aligned(8))) deviceLimit;
+
   /**
-   * Controller configuration data format
+   * Podconf data format
    */
   typedef struct
   {
-    char pod_uid[48];
-    int limit;
-    char occupied[4044];
-    char container_name[FILENAME_MAX];
-    char bus_id[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
-    uint64_t gpu_memory;
-    int utilization;
-    int hard_limit;
-    version_t driver_version;
-    int enable;
+    char pod_name[48];
+    char resource_name[48];
+    char *gpu_uuids[16];
+    int gpu_count;
+
+    int gpu_mem_limit_valid;
+    int gpu_mem_limit[16];
+    uint64_t used_gpu_mem[16];
+
+    // int limit;
+    // int utilization;
+    // int hard_limit;
+    int valid;
   } __attribute__((packed, aligned(8))) resource_data_t;
+
+  typedef struct
+  {
+    CUdevice device;
+    char uuid[48];
+  } __attribute__((packed, aligned(8))) device_info;
 
   typedef enum
   {
@@ -165,33 +163,16 @@ extern "C"
   })
 
   /**
-   * Read controller configuration from \aCONTROLLER_CONFIG_PATH
+   * Read controller configuration from POD_CONF
    *
    * @return 0 -> success
    */
-  int read_controller_configuration();
+  int read_anylearn_podconf();
 
   /**
    * Load library and initialize some data
    */
   void load_necessary_data();
-
-  /**
-   * Register data to remote controller to retrieve configuration
-   *
-   * @param bus_id bus is of GPU card
-   * @param pod_uid  pod uid of Pod
-   * @param container_name container name of Pod
-   */
-  void register_to_remote_with_data(const char *bus_id, const char *pod_uid,
-                                    const char *container_name);
-
-  /**
-   * Tell whether we're using old method to find controller configuration path
-   *
-   * @return 1 -> using new, 0 -> using old
-   */
-  int is_custom_config_path();
 
 #ifdef __cplusplus
 }

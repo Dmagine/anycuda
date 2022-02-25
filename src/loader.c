@@ -30,6 +30,7 @@
 #include "include/cuda-helper.h"
 #include "include/hijack.h"
 #include "include/nvml-helper.h"
+#include "include/cJSON.h"
 
 entry_t cuda_library_entry[] = {
     {.name = "cuInit"},
@@ -842,18 +843,26 @@ static void UNUSED bug_on()
 static pthread_once_t g_cuda_set = PTHREAD_ONCE_INIT;
 static pthread_once_t g_driver_set = PTHREAD_ONCE_INIT;
 
-resource_data_t g_vcuda_config = {
-    .pod_uid = "",
-    .limit = 0,
-    .container_name = "",
-    .utilization = 0,
-    .gpu_memory = 0,
-    .enable = 1,
+resource_data_t g_anycuda_config = {
+    .pod_name = "",
+    .resource_name = "",
+    .gpu_uuids = {0},
+    .gpu_count = 0,
+    .gpu_mem_limit_valid = 0,
+    .gpu_mem_limit = {0},
+    .used_gpu_mem = {0},
+    // .limit = 0,
+    // .utilization = 0,
+    .valid = 0,
 };
 
+cJSON *g_podconf;
+
+device_info g_devices_info[16];
+int g_device_count = 0;
+
 static char base_dir[FILENAME_MAX] = EMPTY_PREFIX;
-char config_path[FILENAME_MAX] = CONTROLLER_CONFIG_PATH;
-char pid_path[FILENAME_MAX] = PIDS_CONFIG_PATH;
+char config_path[FILENAME_MAX] = {0};
 char driver_version[FILENAME_MAX] = "";
 
 static void load_driver_libraries()
@@ -956,225 +965,6 @@ void load_cuda_libraries()
   dlclose(table);
 }
 
-// #lizard forgives
-int get_cgroup_data(const char *pid_cgroup, char *pod_uid, char *container_id,
-                    size_t size)
-{
-  int ret = 1;
-  FILE *cgroup_fd = NULL;
-  char *token = NULL, *last_ptr = NULL, *last_second = NULL;
-  char *cgroup_ptr = NULL;
-  char buffer[4096];
-  int is_systemd = 0;
-  char *prune_pos = NULL;
-
-  cgroup_fd = fopen(pid_cgroup, "r");
-  if (unlikely(!cgroup_fd))
-  {
-    LOGGER(4, "can't open %s, error %s", pid_cgroup, strerror(errno));
-    goto DONE;
-  }
-
-  /**
-   * find memory cgroup name
-   */
-  while (!feof(cgroup_fd))
-  {
-    buffer[0] = '\0';
-    if (unlikely(!fgets(buffer, sizeof(buffer), cgroup_fd)))
-    {
-      LOGGER(4, "can't get line from %s", pid_cgroup);
-      goto DONE;
-    }
-
-    buffer[strlen(buffer) - 1] = '\0';
-
-    last_ptr = NULL;
-    token = buffer;
-    for (token = strtok_r(token, ":", &last_ptr); token;
-         token = NULL, token = strtok_r(token, ":", &last_ptr))
-    {
-      if (!strcmp(token, "memory"))
-      {
-        cgroup_ptr = strtok_r(NULL, ":", &last_ptr);
-        break;
-      }
-    }
-
-    if (cgroup_ptr)
-    {
-      break;
-    }
-  }
-
-  if (!cgroup_ptr)
-  {
-    LOGGER(4, "can't find memory cgroup from %s", pid_cgroup);
-    goto DONE;
-  }
-
-  /**
-   * find container id
-   */
-  last_ptr = NULL;
-  last_second = NULL;
-  token = cgroup_ptr;
-  while (*token)
-  {
-    if (*token == '/')
-    {
-      last_second = last_ptr;
-      last_ptr = token;
-    }
-    ++token;
-  }
-
-  if (!last_ptr)
-  {
-    goto DONE;
-  }
-
-  strncpy(container_id, last_ptr + 1, size);
-  container_id[size - 1] = '\0';
-
-  /**
-   * if cgroup is systemd, cgroup pattern should be like
-   * /kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-pod27882189_b4d9_11e9_b287_ec0d9ae89a20.slice/docker-4aa615892ab2a014d52178bdf3da1c4a45c8ddfb5171dd6e39dc910f96693e14.scope
-   * /kubepods.slice/kubepods-pod019c1fe8_0d92_4aa0_b61c_4df58bdde71c.slice/cri-containerd-9e073649debeec6d511391c9ec7627ee67ce3a3fb508b0fa0437a97f8e58ba98.scope
-   */
-  if ((prune_pos = strstr(container_id, ".scope")))
-  {
-    is_systemd = 1;
-    *prune_pos = '\0';
-  }
-
-  /**
-   * find pod uid
-   */
-  *last_ptr = '\0';
-  if (!last_second)
-  {
-    goto DONE;
-  }
-
-  strncpy(pod_uid, last_second, size);
-  pod_uid[size - 1] = '\0';
-
-  if (is_systemd && (prune_pos = strstr(pod_uid, ".slice")))
-  {
-    *prune_pos = '\0';
-  }
-
-  /**
-   * remove unnecessary chars from $container_id and $pod_uid
-   */
-  if (is_systemd)
-  {
-    /**
-     * For this kind of cgroup path, we need to find the last appearance of
-     * slash
-     * /kubepods.slice/kubepods-pod019c1fe8_0d92_4aa0_b61c_4df58bdde71c.slice/cri-containerd-9e073649debeec6d511391c9ec7627ee67ce3a3fb508b0fa0437a97f8e58ba98.scope
-     */
-    prune_pos = NULL;
-    token = container_id;
-    while (*token)
-    {
-      if (*token == '-')
-      {
-        prune_pos = token;
-      }
-      ++token;
-    }
-
-    if (!prune_pos)
-    {
-      LOGGER(4, "no - prefix");
-      goto DONE;
-    }
-
-    memmove(container_id, prune_pos + 1, strlen(container_id));
-
-    prune_pos = strstr(pod_uid, "-pod");
-    if (!prune_pos)
-    {
-      LOGGER(4, "no pod string");
-      goto DONE;
-    }
-    prune_pos += strlen("-pod");
-    memmove(pod_uid, prune_pos, strlen(prune_pos));
-    pod_uid[strlen(prune_pos)] = '\0';
-    prune_pos = pod_uid;
-    while (*prune_pos)
-    {
-      if (*prune_pos == '_')
-      {
-        *prune_pos = '-';
-      }
-      ++prune_pos;
-    }
-  }
-  else
-  {
-    memmove(pod_uid, pod_uid + strlen("/pod"), strlen(pod_uid));
-  }
-
-  ret = 0;
-DONE:
-  if (cgroup_fd)
-  {
-    fclose(cgroup_fd);
-  }
-  return ret;
-}
-
-static int get_path_by_cgroup(const char *pid_cgroup)
-{
-  int ret = 1;
-  char pod_uid[4096], container_id[4096];
-
-  if (is_custom_config_path())
-  {
-    return 0;
-  }
-
-  if (unlikely(get_cgroup_data(pid_cgroup, pod_uid, container_id,
-                               sizeof(container_id))))
-  {
-    LOGGER(4, "can't find container id from %s", pid_cgroup);
-    goto DONE;
-  }
-
-  snprintf(base_dir, sizeof(base_dir), "%s%s", VCUDA_CONFIG_PATH, container_id);
-  snprintf(config_path, sizeof(config_path), "%s/%s", base_dir,
-           CONTROLLER_CONFIG_NAME);
-  snprintf(pid_path, sizeof(pid_path), "%s/%s", base_dir, PIDS_CONFIG_NAME);
-
-  LOGGER(4, "config file: %s", config_path);
-  LOGGER(4, "pid file: %s", pid_path);
-  ret = 0;
-
-  LOGGER(4, "register to remote: pod uid: %s, cont id: %s", pod_uid,
-         container_id);
-  register_to_remote_with_data("", pod_uid, container_id);
-DONE:
-  return ret;
-}
-
-static int is_default_config_path()
-{
-  int fd = -1;
-
-  fd = open(config_path, O_RDONLY);
-  if (fd == -1)
-  {
-    return 0;
-  }
-
-  close(fd);
-
-  return 1;
-}
-
 static void matchRegex(const char *pattern, const char *matchString,
                        char *version)
 {
@@ -1210,6 +1000,22 @@ static void matchRegex(const char *pattern, const char *matchString,
   return;
 }
 
+static void load_devices_info()
+{
+  CUDA_ENTRY_CALL(cuda_library_entry, cuDeviceGetCount, &g_device_count);
+  for (int i = 0; i < g_device_count; i++)
+  {
+    CUDA_ENTRY_CALL(cuda_library_entry, cuDeviceGet, &g_devices_info[i].device, i);
+    CUDA_ENTRY_CALL(cuda_library_entry, cuDeviceGetUuid, &g_devices_info[i].uuid, g_devices_info[i].device);
+  }
+}
+
+static void load_podconf_path()
+{
+  strncpy(g_anycuda_config.pod_name, getenv("MY_POD_NAME"), 48);
+  snprintf(config_path, FILENAME_MAX - 1, "%s/%s.podconf", ANYCUDA_CONFIG_PATH, g_anycuda_config.pod_name);
+}
+
 static void read_version_from_proc(char *version)
 {
   char *line = NULL;
@@ -1234,62 +1040,12 @@ static void read_version_from_proc(char *version)
   fclose(fp);
 }
 
-int read_controller_configuration()
-{
-  int fd = 0;
-  int rsize;
-  int ret = 1;
-
-  if (!is_default_config_path())
-  {
-    if (get_path_by_cgroup("/proc/self/cgroup"))
-    {
-      LOGGER(FATAL, "can't get config file path");
-    }
-  }
-
-  fd = open(config_path, O_RDONLY);
-  if (unlikely(fd == -1))
-  {
-    LOGGER(4, "can't open %s, error %s", config_path, strerror(errno));
-    goto DONE;
-  }
-
-  rsize = (int)read(fd, (void *)&g_vcuda_config, sizeof(resource_data_t));
-  if (unlikely(rsize != sizeof(g_vcuda_config)))
-  {
-    LOGGER(4, "can't read %s, need %zu but got %d", CONTROLLER_CONFIG_PATH,
-           sizeof(resource_data_t), rsize);
-    goto DONE;
-  }
-
-  read_version_from_proc(driver_version);
-  ret = 0;
-
-  LOGGER(4, "pod uid          : %s", g_vcuda_config.pod_uid);
-  LOGGER(4, "limit            : %d", g_vcuda_config.limit);
-  LOGGER(4, "container name   : %s", g_vcuda_config.container_name);
-  LOGGER(4, "total utilization: %d", g_vcuda_config.utilization);
-  LOGGER(4, "total gpu memory : %" PRIu64, g_vcuda_config.gpu_memory);
-  LOGGER(4, "driver version   : %s", driver_version);
-  LOGGER(4, "hard limit mode  : %d", g_vcuda_config.hard_limit);
-  LOGGER(4, "enable mode      : %d", g_vcuda_config.enable);
-DONE:
-  if (likely(fd))
-  {
-    close(fd);
-  }
-
-  return ret;
-}
-
 void load_necessary_data()
 {
-  read_controller_configuration();
+  load_podconf_path();
+  read_version_from_proc(driver_version);
   load_cuda_single_library(CUDA_ENTRY_ENUM(cuDriverGetVersion));
 
   pthread_once(&g_cuda_set, load_cuda_libraries);
   pthread_once(&g_driver_set, load_driver_libraries);
 }
-
-int is_custom_config_path() { return strcmp(base_dir, EMPTY_PREFIX) != 0; }

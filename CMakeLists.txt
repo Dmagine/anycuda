@@ -20,6 +20,7 @@ if (${USE_ORIGINAL})
     add_library(cuda-control SHARED
             src/hijack_call.c
             include/hijack.h
+            include/cJSON.h
             include/cuda-subset.h
             include/nvml-subset.h
             include/cuda-helper.h
@@ -27,6 +28,7 @@ if (${USE_ORIGINAL})
             src/cuda_originals.c
             src/nvml_entry.c
             src/loader.c
+            src/cJSON.c
             src/register.c)
     target_link_libraries(cuda-control ${STATIC_C_LIBRARIES})
 else (NOT ${USE_ORIGINAL})
@@ -34,6 +36,7 @@ else (NOT ${USE_ORIGINAL})
     add_library(cuda-control SHARED
             src/hijack_call.c
             include/hijack.h
+            include/cJSON.h
             include/cuda-subset.h
             include/nvml-subset.h
             include/cuda-helper.h
@@ -41,6 +44,7 @@ else (NOT ${USE_ORIGINAL})
             src/cuda_originals.c
             src/nvml_entry.c
             src/loader.c
+            src/cJSON.c
             src/register.c)
 
     target_link_libraries(cuda-control ${STATIC_C_LIBRARIES})

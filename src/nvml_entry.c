@@ -26,7 +26,7 @@
 
 extern entry_t cuda_library_entry[];
 extern entry_t nvml_library_entry[];
-extern resource_data_t g_vcuda_config;
+extern resource_data_t g_anycuda_config;
 
 extern nvmlReturn_t nvmlInitWithFlags(unsigned int flags)
 {
@@ -1059,7 +1059,7 @@ nvmlReturn_t nvmlDeviceSetAutoBoostedClocksEnabled(nvmlDevice_t device,
 nvmlReturn_t nvmlDeviceSetComputeMode(nvmlDevice_t device,
                                       nvmlComputeMode_t mode)
 {
-  if (g_vcuda_config.enable)
+  if (g_anycuda_config.valid)
   {
     return NVML_ERROR_NOT_SUPPORTED;
   }
@@ -1782,7 +1782,7 @@ nvmlGpuInstanceCreateComputeInstance(nvmlGpuInstance_t gpuInstance,
 
 nvmlReturn_t nvmlGpuInstanceDestroy(nvmlGpuInstance_t gpuInstance)
 {
-  return NVML_ENTRY_CALL(cuda_library_entry, nvmlGpuInstanceDestroy,
+  return NVML_ENTRY_CALL(nvml_library_entry, nvmlGpuInstanceDestroy,
                          gpuInstance);
 }
 
