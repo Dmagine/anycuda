@@ -846,7 +846,8 @@ static pthread_once_t g_driver_set = PTHREAD_ONCE_INIT;
 resource_data_t g_anycuda_config = {
     .pod_name = "",
     .resource_name = "",
-    .gpu_uuids = {0},
+    .gpu_uuids = {},
+    .gpu_cuda_uuids = {},
     .gpu_count = 0,
     .gpu_mem_limit_valid = 0,
     .gpu_mem_limit = {0},
@@ -859,7 +860,7 @@ cJSON *g_podconf;
 device_info g_devices_info[16];
 int g_device_count = 0;
 
-char config_path[FILENAME_MAX] = {0};
+char config_path[FILENAME_MAX] = "";
 char driver_version[FILENAME_MAX] = "";
 
 static void load_driver_libraries()

@@ -116,10 +116,11 @@ extern "C"
     char pod_name[48];
     char resource_name[48];
     char *gpu_uuids[16];
+    char gpu_cuda_uuids[16][16];
     int gpu_count;
 
     int gpu_mem_limit_valid;
-    int gpu_mem_limit[16];
+    size_t gpu_mem_limit[16];
     uint64_t used_gpu_mem[16];
 
     int valid;
@@ -128,7 +129,7 @@ extern "C"
   typedef struct
   {
     CUdevice device;
-    char uuid[48];
+    CUuuid uuid;
   } __attribute__((packed, aligned(8))) device_info;
 
   typedef enum
