@@ -21,17 +21,23 @@ int main()
         exit(0);
 
     //获得设备０句柄
-    CUdevice cuDevice = 0;
-    cuDeviceGet(&cuDevice, 0);
+    CUdevice cuDevice0, cuDevice1;
+    cuDeviceGet(&cuDevice0, 0);
+    cuDeviceGet(&cuDevice1, 1);
 
     //创建上下文
-    CUcontext cuContext;
-    cuCtxCreate(&cuContext, 0, cuDevice);
+    CUcontext cuContext0, cuContext1;
+    cuCtxCreate_v2(&cuContext0, 0, cuDevice0);
+    cuCtxCreate_v2(&cuContext1, 0, cuDevice1);
 
     //显存中分配向量空间
     size_t size = DATA_SIZE * sizeof(float);
-    CUdeviceptr d_A;
+    CUdeviceptr d_A, d_B;
+    cuCtxSetCurrent(cuContext0);
     cuMemAlloc_v2(&d_A, size);
+
+    cuCtxSetCurrent(cuContext1);
+    cuMemAlloc_v2(&d_B, size);
 
     //初始化host的变量
     for (int i = 0; i < DATA_SIZE; i++)
