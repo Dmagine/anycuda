@@ -413,7 +413,7 @@ static void get_used_gpu_memory(void *arg, CUdevice device_id)
   if (unlikely(ret))
   {
     LOGGER(4, "nvmlDeviceGetHandleByIndex can't find device %d, return %d", device_id, ret);
-    *used_memory = g_anycuda_config.used_gpu_mem[0];
+    *used_memory = 0;
     return;
   }
 
@@ -426,7 +426,7 @@ static void get_used_gpu_memory(void *arg, CUdevice device_id)
            "nvmlDeviceGetComputeRunningProcesses can't get pids on device 0, "
            "return %d",
            ret);
-    *used_memory = g_anycuda_config.used_gpu_mem[device_id];
+    *used_memory = 0;
     return;
   }
 
@@ -919,7 +919,7 @@ CUresult cuDeviceTotalMem_v2(size_t *bytes, CUdevice dev)
 {
   if (g_anycuda_config.valid && g_anycuda_config.gpu_mem_limit_valid)
   {
-    *bytes = g_anycuda_config.used_gpu_mem[dev];
+    *bytes = g_anycuda_config.gpu_mem_limit[dev];
 
     return CUDA_SUCCESS;
   }
@@ -931,7 +931,7 @@ CUresult cuDeviceTotalMem(size_t *bytes, CUdevice dev)
 {
   if (g_anycuda_config.valid && g_anycuda_config.gpu_mem_limit_valid)
   {
-    *bytes = g_anycuda_config.used_gpu_mem[dev];
+    *bytes = g_anycuda_config.gpu_mem_limit[dev];
 
     return CUDA_SUCCESS;
   }
@@ -952,7 +952,7 @@ CUresult cuMemGetInfo_v2(size_t *free, size_t *total)
     }
     get_used_gpu_memory((void *)&used, device_id);
 
-    *total = g_anycuda_config.used_gpu_mem[device_id];
+    *total = g_anycuda_config.gpu_mem_limit[device_id];
     *free =
         used > g_anycuda_config.gpu_mem_limit[device_id] ? 0 : g_anycuda_config.gpu_mem_limit[device_id] - used;
 
@@ -976,7 +976,7 @@ CUresult cuMemGetInfo(size_t *free, size_t *total)
     }
     get_used_gpu_memory((void *)&used, device_id);
 
-    *total = g_anycuda_config.used_gpu_mem[device_id];
+    *total = g_anycuda_config.gpu_mem_limit[device_id];
     *free =
         used > g_anycuda_config.gpu_mem_limit[device_id] ? 0 : g_anycuda_config.gpu_mem_limit[device_id] - used;
 

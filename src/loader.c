@@ -851,7 +851,6 @@ resource_data_t g_anycuda_config = {
     .gpu_count = 0,
     .gpu_mem_limit_valid = 0,
     .gpu_mem_limit = {0},
-    .used_gpu_mem = {0},
     .valid = 0,
 };
 
