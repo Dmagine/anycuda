@@ -3,7 +3,7 @@ project(hijack C CXX)
 
 add_definitions(-D_GNU_SOURCE)
 add_compile_options(-Wall -Wshadow -Werror -Wno-format)
-add_compile_options(-g -O0)
+add_compile_options(-g -O2)
 
 set(STATIC_C_LIBRARIES -static-libgcc -static-libstdc++)
 
