@@ -9,6 +9,7 @@ int src[DATA_SIZE];
 int dest[DATA_SIZE];
 
 CUdeviceptr onDevicePtr[60];
+CUdeviceptr onDevicePtr2[60];
 
 int main()
 {
@@ -60,6 +61,27 @@ int main()
 
     cuCtxSetCurrent(cuContext1);
     cuMemAlloc_v2(&d_B, size);
+
+    for (int i = 0; i < 10; i++)
+    {
+        cuMemAlloc_v2(&onDevicePtr2[i], size);
+    }
+    for (int i = 10; i < 20; i++)
+    {
+        cuMemAlloc_v2(&onDevicePtr2[i], size);
+    }
+    for (int i = 20; i < 30; i++)
+    {
+        cuMemAlloc_v2(&onDevicePtr2[i], size);
+    }
+    for (int i = 30; i < 40; i++)
+    {
+        cuMemAlloc_v2(&onDevicePtr2[i], size);
+    }
+    for (int i = 40; i < 50; i++)
+    {
+        cuMemAlloc_v2(&onDevicePtr2[i], size);
+    }
 
     //初始化host的变量
     for (int i = 0; i < DATA_SIZE; i++)

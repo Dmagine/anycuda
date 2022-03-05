@@ -221,7 +221,11 @@ int read_anylearn_podconf()
   }
   // read podconf from json
   char buff[4096] = {"\0"};
-  read(fd, buff, 4096);
+  if (read(fd, buff, 4096) >= 4096)
+  {
+    LOGGER(4, "podconf exceed length limit %s", config_path);
+    goto DONE;
+  }
 
   g_podconf = cJSON_Parse(buff);
   strncpy(g_anycuda_config.resource_name, cJSON_GetObjectItem(g_podconf, "resourceName")->valuestring, 48);
