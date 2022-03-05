@@ -3,10 +3,12 @@
 #include <unistd.h>
 #include <cuda.h>
 
-#define DATA_SIZE 1048576
+#define DATA_SIZE 104748364
 
 int src[DATA_SIZE];
 int dest[DATA_SIZE];
+
+CUdeviceptr onDevicePtr[60];
 
 int main()
 {
@@ -35,6 +37,26 @@ int main()
     CUdeviceptr d_A, d_B;
     cuCtxSetCurrent(cuContext0);
     cuMemAlloc_v2(&d_A, size);
+    for (int i = 0; i < 10; i++)
+    {
+        cuMemAlloc_v2(&onDevicePtr[i], size);
+    }
+    for (int i = 10; i < 20; i++)
+    {
+        cuMemAlloc_v2(&onDevicePtr[i], size);
+    }
+    for (int i = 20; i < 30; i++)
+    {
+        cuMemAlloc_v2(&onDevicePtr[i], size);
+    }
+    for (int i = 30; i < 40; i++)
+    {
+        cuMemAlloc_v2(&onDevicePtr[i], size);
+    }
+    for (int i = 40; i < 50; i++)
+    {
+        cuMemAlloc_v2(&onDevicePtr[i], size);
+    }
 
     cuCtxSetCurrent(cuContext1);
     cuMemAlloc_v2(&d_B, size);
