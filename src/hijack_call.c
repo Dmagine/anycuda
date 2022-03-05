@@ -587,7 +587,7 @@ CUresult cuMemAllocManaged(CUdeviceptr *dptr, size_t bytesize,
     get_used_gpu_memory((void *)&used, ordinal);
 
     if (g_anycuda_config.gpu_mem_limit[ordinal] <= 0 ||
-        g_anycuda_config.gpu_mem_limit[ordinal] > 0 && request_size > g_anycuda_config.gpu_mem_limit[ordinal])
+        (g_anycuda_config.gpu_mem_limit[ordinal] > 0 && request_size > g_anycuda_config.gpu_mem_limit[ordinal]))
     {
       ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, bytesize, CU_MEM_ATTACH_GLOBAL);
       goto DONE;
@@ -617,7 +617,7 @@ CUresult cuMemAlloc_v2(CUdeviceptr *dptr, size_t bytesize)
     get_used_gpu_memory((void *)&used, ordinal);
 
     if (g_anycuda_config.gpu_mem_limit[ordinal] <= 0 ||
-        g_anycuda_config.gpu_mem_limit[ordinal] > 0 && request_size > g_anycuda_config.gpu_mem_limit[ordinal])
+        (g_anycuda_config.gpu_mem_limit[ordinal] > 0 && request_size > g_anycuda_config.gpu_mem_limit[ordinal]))
     {
       LOGGER(VERBOSE, "has used more gpu mem than limit on device %d: %lu >= %lu", ordinal, used + request_size, g_anycuda_config.gpu_mem_limit[ordinal]);
       ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, bytesize, CU_MEM_ATTACH_GLOBAL);
@@ -647,7 +647,7 @@ CUresult cuMemAlloc(CUdeviceptr *dptr, size_t bytesize)
     get_used_gpu_memory((void *)&used, ordinal);
 
     if (g_anycuda_config.gpu_mem_limit[ordinal] <= 0 ||
-        g_anycuda_config.gpu_mem_limit[ordinal] > 0 && request_size > g_anycuda_config.gpu_mem_limit[ordinal])
+        (g_anycuda_config.gpu_mem_limit[ordinal] > 0 && request_size > g_anycuda_config.gpu_mem_limit[ordinal]))
     {
       ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, bytesize, CU_MEM_ATTACH_GLOBAL);
       goto DONE;
@@ -678,7 +678,7 @@ CUresult cuMemAllocPitch_v2(CUdeviceptr *dptr, size_t *pPitch,
     get_used_gpu_memory((void *)&used, ordinal);
 
     if (g_anycuda_config.gpu_mem_limit[ordinal] <= 0 ||
-        g_anycuda_config.gpu_mem_limit[ordinal] > 0 && request_size > g_anycuda_config.gpu_mem_limit[ordinal])
+        (g_anycuda_config.gpu_mem_limit[ordinal] > 0 && request_size > g_anycuda_config.gpu_mem_limit[ordinal]))
     {
       ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, request_size, CU_MEM_ATTACH_GLOBAL);
       goto DONE;
@@ -709,7 +709,7 @@ CUresult cuMemAllocPitch(CUdeviceptr *dptr, size_t *pPitch, size_t WidthInBytes,
     get_used_gpu_memory((void *)&used, ordinal);
 
     if (g_anycuda_config.gpu_mem_limit[ordinal] <= 0 ||
-        g_anycuda_config.gpu_mem_limit[ordinal] > 0 && request_size > g_anycuda_config.gpu_mem_limit[ordinal])
+        (g_anycuda_config.gpu_mem_limit[ordinal] > 0 && request_size > g_anycuda_config.gpu_mem_limit[ordinal]))
     {
       ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, request_size, CU_MEM_ATTACH_GLOBAL);
       goto DONE;
@@ -772,7 +772,7 @@ cuArrayCreate_helper(const CUDA_ARRAY_DESCRIPTOR *pAllocateArray)
     get_used_gpu_memory((void *)&used, device_id);
 
     if (g_anycuda_config.gpu_mem_limit[device_id] <= 0 ||
-        g_anycuda_config.gpu_mem_limit[device_id] > 0 && request_size > g_anycuda_config.gpu_mem_limit[device_id])
+        (g_anycuda_config.gpu_mem_limit[device_id] > 0 && request_size > g_anycuda_config.gpu_mem_limit[device_id]))
     {
       ret = CUDA_ERROR_OUT_OF_MEMORY;
       goto DONE;
@@ -840,7 +840,7 @@ cuArray3DCreate_helper(const CUDA_ARRAY3D_DESCRIPTOR *pAllocateArray)
     get_used_gpu_memory((void *)&used, device_id);
 
     if (g_anycuda_config.gpu_mem_limit[device_id] <= 0 ||
-        g_anycuda_config.gpu_mem_limit[device_id] > 0 && request_size > g_anycuda_config.gpu_mem_limit[device_id])
+        (g_anycuda_config.gpu_mem_limit[device_id] > 0 && request_size > g_anycuda_config.gpu_mem_limit[device_id]))
     {
       ret = CUDA_ERROR_OUT_OF_MEMORY;
       goto DONE;
@@ -910,7 +910,7 @@ cuMipmappedArrayCreate(CUmipmappedArray *pHandle,
     get_used_gpu_memory((void *)&used, device_id);
 
     if (g_anycuda_config.gpu_mem_limit[device_id] <= 0 ||
-        g_anycuda_config.gpu_mem_limit[device_id] > 0 && request_size > g_anycuda_config.gpu_mem_limit[device_id])
+        (g_anycuda_config.gpu_mem_limit[device_id] > 0 && request_size > g_anycuda_config.gpu_mem_limit[device_id]))
     {
       ret = CUDA_ERROR_OUT_OF_MEMORY;
       goto DONE;
