@@ -52,8 +52,6 @@ static const struct timespec g_wait = {
 /** internal function definition */
 static void active_podconf_notifier();
 
-int get_cuda_device_ordinal(void *, CUdeviceptr);
-
 static void *podconf_watcher(void *);
 
 int read_anylearn_podconf();
@@ -269,11 +267,6 @@ DONE:
   }
 
   return ret;
-}
-
-int get_cuda_device_ordinal(void *ordinal, CUdeviceptr ptr)
-{
-  return CUDA_ENTRY_CALL(cuda_library_entry, cuPointerGetAttribute, ordinal, CU_POINTER_ATTRIBUTE_DEVICE_ORDINAL, ptr);
 }
 
 int split_str(char *line, char *key, char *value, char d)
@@ -579,7 +572,7 @@ CUresult cuMemAllocManaged(CUdeviceptr *dptr, size_t bytesize,
   if (g_anycuda_config.valid && g_anycuda_config.gpu_mem_limit_valid)
   {
     CUdevice ordinal;
-    ret = get_cuda_device_ordinal(&ordinal, *dptr);
+    ret = CUDA_ENTRY_CALL(cuda_library_entry, cuCtxGetDevice, &ordinal);
     if (ret != CUDA_SUCCESS)
     {
       goto DONE;
