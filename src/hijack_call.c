@@ -240,7 +240,8 @@ int read_anylearn_podconf()
       cJSON *limit = cJSON_GetObjectItem(gpu_limits, uuid_str);
       if (limit != NULL)
       {
-        gpu_mem_limit[i] = limit->valueint * 1024 * 1024;
+        gpu_mem_limit[i] = limit->valueint;
+        gpu_mem_limit[i] = gpu_mem_limit[i] * 1024 * 1024;
       }
     }
     g_anycuda_config.gpu_mem_limit_valid = 1;
@@ -255,7 +256,7 @@ int read_anylearn_podconf()
   LOGGER(4, "gpu count        : %d", g_anycuda_config.gpu_count);
   for (int i = 0; i < g_anycuda_config.gpu_count; i++)
   {
-    LOGGER(4, "gpu-%d: %s", i, g_anycuda_config.gpu_uuids[i]);
+    LOGGER(4, "gpu-%d-%s: %zu", i, g_anycuda_config.gpu_uuids[i], g_anycuda_config.gpu_mem_limit[i]);
   }
   g_anycuda_config.valid = 1;
 
