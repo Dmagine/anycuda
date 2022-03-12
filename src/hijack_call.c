@@ -599,8 +599,14 @@ CUresult cuMemAlloc_v2(CUdeviceptr *dptr, size_t bytesize)
   size_t request_size = bytesize;
   CUresult ret;
 
-  if (g_anycuda_config.valid && g_anycuda_config.gpu_mem_limit_valid)
+  if (g_anycuda_config.valid)
   {
+    if (!g_anycuda_config.gpu_mem_limit_valid)
+    {
+      LOGGER(VERBOSE, "gpuLimit is not valid now, use host memory");
+      ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, bytesize, CU_MEM_ATTACH_GLOBAL);
+      goto DONE;
+    }
     CUdevice ordinal;
     ret = CUDA_ENTRY_CALL(cuda_library_entry, cuCtxGetDevice, &ordinal);
     if (ret != CUDA_SUCCESS)
@@ -609,7 +615,7 @@ CUresult cuMemAlloc_v2(CUdeviceptr *dptr, size_t bytesize)
     }
     get_used_gpu_memory((void *)&used, ordinal);
 
-    if (g_anycuda_config.gpu_mem_limit[ordinal] >= 0 && used + request_size > g_anycuda_config.gpu_mem_limit[ordinal])
+    if (g_anycuda_config.gpu_mem_limit[ordinal] >= 0 && (used + request_size > g_anycuda_config.gpu_mem_limit[ordinal]))
     {
       LOGGER(VERBOSE, "has used more gpu mem than limit on device %d: %lu >= %lu", ordinal, used + request_size, g_anycuda_config.gpu_mem_limit[ordinal]);
       ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, bytesize, CU_MEM_ATTACH_GLOBAL);
@@ -628,8 +634,14 @@ CUresult cuMemAlloc(CUdeviceptr *dptr, size_t bytesize)
   size_t request_size = bytesize;
   CUresult ret;
 
-  if (g_anycuda_config.valid && g_anycuda_config.gpu_mem_limit_valid)
+  if (g_anycuda_config.valid)
   {
+    if (!g_anycuda_config.gpu_mem_limit_valid)
+    {
+      LOGGER(VERBOSE, "gpuLimit is not valid now, use host memory");
+      ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, bytesize, CU_MEM_ATTACH_GLOBAL);
+      goto DONE;
+    }
     CUdevice ordinal;
     ret = CUDA_ENTRY_CALL(cuda_library_entry, cuCtxGetDevice, &ordinal);
     if (ret != CUDA_SUCCESS)
@@ -658,8 +670,14 @@ CUresult cuMemAllocPitch_v2(CUdeviceptr *dptr, size_t *pPitch,
   size_t request_size = ROUND_UP(WidthInBytes * Height, ElementSizeBytes);
   CUresult ret;
 
-  if (g_anycuda_config.valid && g_anycuda_config.gpu_mem_limit_valid)
+  if (g_anycuda_config.valid)
   {
+    if (!g_anycuda_config.gpu_mem_limit_valid)
+    {
+      LOGGER(VERBOSE, "gpuLimit is not valid now, use host memory");
+      ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, request_size, CU_MEM_ATTACH_GLOBAL);
+      goto DONE;
+    }
     CUdevice ordinal;
     ret = CUDA_ENTRY_CALL(cuda_library_entry, cuCtxGetDevice, &ordinal);
     if (ret != CUDA_SUCCESS)
@@ -688,8 +706,14 @@ CUresult cuMemAllocPitch(CUdeviceptr *dptr, size_t *pPitch, size_t WidthInBytes,
   size_t request_size = ROUND_UP(WidthInBytes * Height, ElementSizeBytes);
   CUresult ret;
 
-  if (g_anycuda_config.valid && g_anycuda_config.gpu_mem_limit_valid)
+  if (g_anycuda_config.valid)
   {
+    if (!g_anycuda_config.gpu_mem_limit_valid)
+    {
+      LOGGER(VERBOSE, "gpuLimit is not valid now, use host memory");
+      ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, request_size, CU_MEM_ATTACH_GLOBAL);
+      goto DONE;
+    }
     CUdevice ordinal;
     ret = CUDA_ENTRY_CALL(cuda_library_entry, cuCtxGetDevice, &ordinal);
     if (ret != CUDA_SUCCESS)
