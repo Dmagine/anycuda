@@ -45,8 +45,8 @@ typedef void (*atomic_fn_ptr)(int, void *);
 static pthread_once_t g_init_set = PTHREAD_ONCE_INIT;
 
 static const struct timespec g_wait = {
-    .tv_sec = 0,
-    .tv_nsec = 1000 * MILLISEC,
+    .tv_sec = 1,
+    .tv_nsec = 0,
 };
 
 /** internal function definition */
