@@ -46,7 +46,7 @@ static pthread_once_t g_init_set = PTHREAD_ONCE_INIT;
 
 static const struct timespec g_wait = {
     .tv_sec = 0,
-    .tv_nsec = 120 * MILLISEC,
+    .tv_nsec = 1000 * MILLISEC,
 };
 
 /** internal function definition */
@@ -214,7 +214,7 @@ int read_anylearn_podconf()
   fd = open(config_path, O_RDONLY);
   if (unlikely(fd == -1))
   {
-    LOGGER(4, "can't open %s, error %s", config_path, strerror(errno));
+    LOGGER(VERBOSE, "can't open %s, error %s", config_path, strerror(errno));
     goto DONE;
   }
   // read podconf from json
@@ -251,12 +251,12 @@ int read_anylearn_podconf()
     }
   }
 
-  LOGGER(4, "pod name         : %s", g_anycuda_config.pod_name);
-  LOGGER(4, "resource name    : %s", g_anycuda_config.resource_name);
-  LOGGER(4, "gpu count        : %d", g_anycuda_config.gpu_count);
+  LOGGER(VERBOSE, "pod name         : %s", g_anycuda_config.pod_name);
+  LOGGER(VERBOSE, "resource name    : %s", g_anycuda_config.resource_name);
+  LOGGER(VERBOSE, "gpu count        : %d", g_anycuda_config.gpu_count);
   for (int i = 0; i < g_anycuda_config.gpu_count; i++)
   {
-    LOGGER(4, "gpu-%d-%s: %zu", i, g_anycuda_config.gpu_uuids[i], g_anycuda_config.gpu_mem_limit[i]);
+    LOGGER(VERBOSE, "gpu-%d-%s: %zu", i, g_anycuda_config.gpu_uuids[i], g_anycuda_config.gpu_mem_limit[i]);
   }
   g_anycuda_config.valid = 1;
 
@@ -406,7 +406,7 @@ static void get_used_gpu_memory(void *arg, CUdevice device_id)
       NVML_ENTRY_CALL(nvml_library_entry, nvmlDeviceGetHandleByIndex, device_id, &dev);
   if (unlikely(ret))
   {
-    LOGGER(4, "nvmlDeviceGetHandleByIndex can't find device %d, return %d", device_id, ret);
+    LOGGER(FATAL, "nvmlDeviceGetHandleByIndex can't find device %d, return %d", device_id, ret);
     *used_memory = 0;
     return;
   }
@@ -416,7 +416,7 @@ static void get_used_gpu_memory(void *arg, CUdevice device_id)
                       dev, &size_on_device, pids_on_device);
   if (unlikely(ret))
   {
-    LOGGER(4,
+    LOGGER(FATAL,
            "nvmlDeviceGetComputeRunningProcesses can't get pids on device 0, "
            "return %d",
            ret);
@@ -424,18 +424,13 @@ static void get_used_gpu_memory(void *arg, CUdevice device_id)
     return;
   }
 
-  for (i = 0; i < size_on_device; i++)
-  {
-    LOGGER(4, "summary: %d used %lld", pids_on_device[i].pid,
-           pids_on_device[i].usedGpuMemory);
-  }
   if (check_in_pod() == 0)
   {
     for (i = 0; i < size_on_device; i++)
     {
       if (check_pod_pid(pids_on_device[i].pid) == 0)
       {
-        LOGGER(4, "%d use memory: %lld", pids_on_device[i].pid,
+        LOGGER(VERBOSE, "pid[%d] use memory: %lld", pids_on_device[i].pid,
                pids_on_device[i].usedGpuMemory);
         *used_memory += pids_on_device[i].usedGpuMemory;
       }
@@ -445,13 +440,13 @@ static void get_used_gpu_memory(void *arg, CUdevice device_id)
   {
     for (i = 0; i < size_on_device; i++)
     {
-      LOGGER(4, "%d use memory: %lld", pids_on_device[i].pid,
+      LOGGER(VERBOSE, "pid[%d] use memory: %lld", pids_on_device[i].pid,
              pids_on_device[i].usedGpuMemory);
       *used_memory += pids_on_device[i].usedGpuMemory;
     }
   }
 
-  LOGGER(4, "total used memory: %zu", *used_memory);
+  LOGGER(VERBOSE, "total used memory: %zu", *used_memory);
 }
 
 void get_uuid_str(char *dest, CUuuid *src)
@@ -617,7 +612,7 @@ CUresult cuMemAlloc_v2(CUdeviceptr *dptr, size_t bytesize)
 
     if (g_anycuda_config.gpu_mem_limit[ordinal] >= 0 && (used + request_size > g_anycuda_config.gpu_mem_limit[ordinal]))
     {
-      LOGGER(VERBOSE, "has used more gpu mem than limit on device %d: %lu >= %lu", ordinal, used + request_size, g_anycuda_config.gpu_mem_limit[ordinal]);
+      LOGGER(WARNING, "has used more gpu mem than limit on device %d: %lu >= %lu", ordinal, used + request_size, g_anycuda_config.gpu_mem_limit[ordinal]);
       ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, bytesize, CU_MEM_ATTACH_GLOBAL);
       goto DONE;
     }
