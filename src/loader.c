@@ -999,8 +999,12 @@ static void matchRegex(const char *pattern, const char *matchString,
 
 static void load_podconf_path()
 {
-  strncpy(g_anycuda_config.pod_name, getenv("MY_POD_NAME"), 48);
-  snprintf(config_path, FILENAME_MAX - 1, "%s/%s.podconf", ANYCUDA_CONFIG_PATH, g_anycuda_config.pod_name);
+  char *pod_name = getenv("MY_POD_NAME");
+  if (pod_name != NULL)
+  {
+    strncpy(g_anycuda_config.pod_name, pod_name, 48);
+    snprintf(config_path, FILENAME_MAX - 1, "%s/%s.podconf", ANYCUDA_CONFIG_PATH, g_anycuda_config.pod_name);
+  }
 }
 
 static void read_version_from_proc(char *version)

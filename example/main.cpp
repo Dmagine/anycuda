@@ -32,12 +32,16 @@ int main()
 
     //显存中分配向量空间
     size_t size = DATA_SIZE * sizeof(float);
-    CUdeviceptr d_A, d_B;
+    CUdeviceptr d_A;
     cuCtxSetCurrent(cuContext0);
     cuMemAlloc_v2(&d_A, size);
 
     cuCtxSetCurrent(cuContext1);
-    cuMemAlloc_v2(&d_B, size);
+    CUdeviceptr d_list[1000];
+    for (int i = 0; i < 1000; i++)
+    {
+        cuMemAlloc_v2(&d_list[i], size);
+    }
 
     //初始化host的变量
     for (int i = 0; i < DATA_SIZE; i++)
@@ -64,8 +68,7 @@ int main()
     {
         printf("some elements are not equal");
     }
-
-    sleep(100);
+    sleep(10000);
 
     //释放显存空间
     cuMemFree(d_A);

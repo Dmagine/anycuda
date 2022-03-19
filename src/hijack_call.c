@@ -198,10 +198,10 @@ static void *podconf_watcher(void *arg UNUSED)
   LOGGER(5, "start %s", __FUNCTION__);
   while (1)
   {
-    nanosleep(&g_wait, NULL);
     do
     {
       read_anylearn_podconf();
+      nanosleep(&g_wait, NULL);
     } while (!g_anycuda_config.valid);
   }
 }
@@ -211,6 +211,11 @@ int read_anylearn_podconf()
   int fd = 0;
   int ret = 1;
 
+  if (strlen(config_path) == 0)
+  {
+    LOGGER(VERBOSE, "podconf is not exist, exit");
+    goto DONE;
+  }
   fd = open(config_path, O_RDONLY);
   if (unlikely(fd == -1))
   {
