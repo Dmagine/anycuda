@@ -611,6 +611,7 @@ CUresult cuMemAlloc_v2(CUdeviceptr *dptr, size_t bytesize)
     ret = CUDA_ENTRY_CALL(cuda_library_entry, cuCtxGetDevice, &ordinal);
     if (ret != CUDA_SUCCESS)
     {
+      LOGGER(VERBOSE, "[cuMemAlloc_v2] can't load device info, ret is %d", ret);
       goto DONE;
     }
     get_used_gpu_memory((void *)&used, ordinal);
@@ -619,11 +620,15 @@ CUresult cuMemAlloc_v2(CUdeviceptr *dptr, size_t bytesize)
     {
       LOGGER(WARNING, "has used more gpu mem than limit on device %d: %lu >= %lu", ordinal, used + request_size, g_anycuda_config.gpu_mem_limit[ordinal]);
       ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, bytesize, CU_MEM_ATTACH_GLOBAL);
+      LOGGER(VERBOSE, "[cuMemAlloc_v2] alloc mem from host, ret is %d", ret);
       goto DONE;
+    } else {
+      LOGGER(VERBOSE, "[Device %d] used %lu, request %lu, limit %lu",  ordinal, used, request_size, g_anycuda_config.gpu_mem_limit[ordinal]);
     }
   }
 
   ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAlloc_v2, dptr, bytesize);
+  LOGGER(VERBOSE, "[cuMemAlloc_v2] alloc mem from device, ret is %d", ret);
 DONE:
   return ret;
 }
@@ -973,6 +978,8 @@ CUresult cuMemGetInfo_v2(size_t *free, size_t *total)
     *total = g_anycuda_config.gpu_mem_limit[device_id];
     *free =
         used > g_anycuda_config.gpu_mem_limit[device_id] ? 0 : g_anycuda_config.gpu_mem_limit[device_id] - used;
+
+    LOGGER(VERBOSE, "[cuMemGetInfo_v2] device %d, used %lu, free %lu, total %lu", device_id, used, free, total);
 
     return CUDA_SUCCESS;
   }
