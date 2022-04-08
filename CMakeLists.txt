@@ -24,11 +24,14 @@ target_include_directories(cuda-control PUBLIC ${CMAKE_SOURCE_DIR})
 target_link_libraries(cuda-control ${STATIC_C_LIBRARIES})
 target_compile_options(cuda-control PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-std=c++11>)
 
-find_package(CUDA 10.0 REQUIRED)
+find_package(CUDA 11.2 REQUIRED)
 add_executable(example example/main.cpp)
-target_include_directories(example PUBLIC ${C_INCLUDE_PATH} "/usr/local/cuda-10.0/include")
+add_executable(mem_occupy_tool tools/mem_occupy_tool.c)
+target_include_directories(example PUBLIC ${C_INCLUDE_PATH} "/usr/local/cuda-11.2/include")
 target_link_libraries(example PRIVATE cuda ${STATIC_C_LIBRARIES})
 target_compile_options(example PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-std=c++11>)
+target_link_libraries(mem_occupy_tool PRIVATE cuda ${STATIC_C_LIBRARIES})
+target_compile_options(mem_occupy_tool PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-std=c++11>)
 
 
 
