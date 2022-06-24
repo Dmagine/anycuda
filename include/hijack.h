@@ -133,10 +133,10 @@ extern "C"
 
   typedef enum
   {
-    INFO = 0,
+    FATAL = 0,
     ERROR = 1,
     WARNING = 2,
-    FATAL = 3,
+    INFO = 3,
     VERBOSE = 4,
   } log_level_enum_t;
 

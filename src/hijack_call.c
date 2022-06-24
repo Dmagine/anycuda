@@ -64,6 +64,8 @@ static const char *cuda_error(CUresult, const char **);
 
 void get_uuid_str(char *dest, CUuuid *src);
 
+const char *human_size_str(size_t bytes);
+
 /** export function definition */
 CUresult cuDriverGetVersion(int *driverVersion);
 CUresult cuInit(unsigned int flag);
@@ -621,7 +623,8 @@ CUresult cuMemAlloc_v2(CUdeviceptr *dptr, size_t bytesize)
       LOGGER(WARNING, "has used more gpu mem than limit on device %d: %lu >= %lu", ordinal, used + request_size, g_anycuda_config.gpu_mem_limit[ordinal]);
 FROM_HOST:
       ret = CUDA_ENTRY_CALL(cuda_library_entry, cuMemAllocManaged, dptr, bytesize, CU_MEM_ATTACH_GLOBAL);
-      LOGGER(VERBOSE, "[cuMemAlloc_v2] alloc mem from host, ret is %d", ret);
+      LOGGER(INFO, "[cuMemAlloc_v2] alloc mem from host, %s", CUDA_SUCCESS == ret ? "OK" : "KO");
+      LOGGER(INFO, "[cuMemAlloc_v2] device %d: used %s, request %s, limit %s", ordinal, human_size_str(used), human_size_str(request_size), human_size_str(g_anycuda_config.gpu_mem_limit[ordinal]));
       goto DONE;
     } else {
       LOGGER(VERBOSE, "[Device %d] used %lu, request %lu, limit %lu",  ordinal, used, request_size, g_anycuda_config.gpu_mem_limit[ordinal]);
@@ -630,6 +633,7 @@ FROM_HOST:
       if (ret == CUDA_SUCCESS) {
         goto DONE;
       } else {
+        LOGGER(WARNING, "--------------------------------")
         LOGGER(WARNING, "[cuMemAlloc_v2] fail to alloc mem from device, ret is %d", ret);
         goto FROM_HOST;
       }
@@ -640,6 +644,31 @@ FROM_HOST:
   LOGGER(VERBOSE, "[cuMemAlloc_v2] alloc mem from device, ret is %d", ret);
 DONE:
   return ret;
+}
+
+const char *human_size_str(size_t bytes)
+{
+  char *suffix[] = {"B", "KiB", "MiB", "GiB"};
+  int length = sizeof(suffix) / sizeof(suffix[0]);
+
+  double dblBytes = bytes;
+  int i = 0;
+
+  if (bytes > 1024) {
+    while (dblBytes > 1024 && i < length - 1) {
+      dblBytes /= 1024.0;
+      i++;
+    }
+  }
+
+  if (dblBytes > 1024) {
+    return ">1 TiB";
+  } else {
+    int olength = snprintf(NULL, 0, "%.02lf %s", dblBytes, suffix[i]);
+    char *output = malloc(sizeof(char) * olength);
+    sprintf(output, "%.02lf %s", dblBytes, suffix[i]);
+    return output;
+  }
 }
 
 CUresult cuMemAlloc(CUdeviceptr *dptr, size_t bytesize)
